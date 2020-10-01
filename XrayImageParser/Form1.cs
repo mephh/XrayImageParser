@@ -1,15 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
 using System.Windows.Forms;
-using System.Configuration;
-using System.Diagnostics;
 
 namespace XrayImageParser
 {
@@ -19,61 +14,30 @@ namespace XrayImageParser
         private List<string> scannedSN = new List<string>(); //list of serials for future no-duplicate-check  method
         private string[] oldFileNames = new string[8]; //array of filenames in input folder
         private string outputFolder = string.Empty;
-        StringBuilder sb = new StringBuilder();
+        private StringBuilder sb = new StringBuilder();
+        private readonly StringBuilder errMsgBox = new StringBuilder();
 
         public Form1()
         {
             InitializeComponent();
             textBox1.Focus(); //set focus to 1st textbox
-            textBox9.Text = ReadSetting("inputFolder"); //load input folder from app.config
-            textBox10.Text = ReadSetting("outputFolder"); //write output folder to app.config
+            textBox9.Text = FileOperations.ReadSetting("inputFolder"); //load input folder from app.config
+            textBox10.Text = FileOperations.ReadSetting("outputFolder"); //write output folder to app.config
         }
-        //LOAD CONFIGURATION -- APP CONFIG
-        static string ReadSetting(string key)
-        {
-            try
-            {
-                var appSettings = ConfigurationManager.AppSettings;
-                string result = appSettings[key] ?? "Not Found"; //check if called setting name exists
-                return result;
-            }
-            catch (ConfigurationErrorsException)
-            {
-                MessageBox.Show("brak zapisanej sciezki");
-                return "Brak takiej sciezki";
-            }
-        }
-
-        static void AddUpdateAppSetting(string key, string value)
-        {
-            try
-            {
-                var configFile = ConfigurationManager.OpenExeConfiguration(ConfigurationUserLevel.None);
-                var settings = configFile.AppSettings.Settings; //load settings from app.config
-                if (settings[key] == null)
-                {
-                    settings.Add(key, value); //create new setting
-                }
-                else
-                {
-                    settings[key].Value = value;
-                }
-                configFile.Save(ConfigurationSaveMode.Modified); //save changes
-                ConfigurationManager.RefreshSection(configFile.AppSettings.SectionInformation.Name); //update app.config
-            }
-            catch (ConfigurationErrorsException)
-            {
-                MessageBox.Show("Error writing app settings");
-            }
-        }
-        //END OF CONFIGURATION METHODS
 
         private bool CheckIfCorrectSerial(string serial)
         {
             if (serial.Length == 24)
             {
-                scannedSN.Add(serial); //for future no-duplicate-check method, for now 2+ files can have same name - MAJOR BUG
-                return true;
+                if (!scannedSN.Contains(serial))
+                {
+                    scannedSN.Add(serial); //for future no-duplicate-check method, for now 2+ files can have same name - MAJOR FLAW, files can be overwritten
+                    return true;
+                }
+                else
+                {
+                    return false;
+                }
             }
             else
             {
@@ -81,22 +45,27 @@ namespace XrayImageParser
             }
         }
 
-        private bool CheckIfFolderExists(string path)
+        private string IncreaseFolderNumber(string folderName)
         {
-            if (Directory.Exists(path))
-            {
-                return true;
+            try
+            {   //maybe linq..
+                var number = string.Concat(folderName.ToArray().Reverse().TakeWhile(char.IsNumber).Reverse());   //stack overflow:)  reverse folder name so you can read from end, if char is a number add it to array, reverse again: Part134 -> 431traP 431|traP -> 134
+                //string number = folderName.Substring(folderName.Length - 2); //will fail at Part100 etc
+                int n = Int32.Parse(number);
+                n += 1;
+                Debug.Assert(n != 1);
+                number = n.ToString();
+                string newFolderName = folderName.Substring(0, folderName.Length - 2) + number;
+                return newFolderName;
             }
-            else
+            catch
             {
-                MessageBox.Show("Sprawdz czy folder isnieje: " + path);
-                return false;
+                MessageBox.Show("Program nie jest w stanie automatycznie zmienic nazwy folderu.\n Sprawdz czy sciezka do folderu Part jest prawidlowa.");
+                return folderName;
             }
         }
-
         private string[] GrabFileNames(string folderPath)
         {
-            //string[] sortedNames = Directory.GetFiles(folderPath, "*.jpg");
             try
             {
                 string[] sortedNames = Directory.GetFiles(folderPath, "*.jpg"); //look only for images
@@ -104,7 +73,7 @@ namespace XrayImageParser
                 Array.Sort(sortedNames); //sort names so serial number is later assigned to correct image
                 return sortedNames;
             }
-            catch(Exception e)
+            catch (Exception e)
             {
                 MessageBox.Show("Nie mozna odczytac nazw plikow. Sprawdz folder ze zdjeciami. Blad: " + e.ToString());
                 return null;
@@ -114,6 +83,10 @@ namespace XrayImageParser
         private bool MoveFile(string inputFile, string outputFile, string boardStatus)
         {
             string outputFileName = outputFolder + "//" + outputFile;
+            if (checkBox1.Checked) //debug mode
+            {
+                MessageBox.Show("Stara nazwa zdjęcia: " + inputFile + " Nowa nazwa: " + outputFileName + "_" + boardStatus + ".jpg");
+            }
             try
             {
                 File.Move(inputFile, outputFileName + "_" + boardStatus + ".jpg");
@@ -126,44 +99,21 @@ namespace XrayImageParser
             }
         }
 
-        private string IncreaseFolderNumber(string folderName)
-        {
-            string number = string.Empty;
-            int n = 0;
-            string newFolderName = string.Empty;
-            try
-            {
-                number = folderName.Substring(folderName.Length - 2); //get only last 2 chars from folder name
-                n = Int32.Parse(number);
-                n += 1;
-                Debug.Assert(n != 1);
-                number = n.ToString();
-                //string newFName = folderName.TrimEnd(new char[] { '0', '1', '2', '3', '4', '5', '6', '7', '8', '9' }) + number;
-                newFolderName = folderName.Substring(0, folderName.Length - 2) + number; //remove old number and add incremented one
-                //MessageBox.Show("increase number name" + newFolderName);
-                return newFolderName;
-            }
-            catch
-            {
-                MessageBox.Show("Niewlasciwa nazwa folderu");
-                return folderName;
-            }
-        }
-
         private void button1_Click(object sender, EventArgs e)
         {
-            AddUpdateAppSetting("inputFolder", textBox9.Text); //save in-out folder paths
-            AddUpdateAppSetting("outputFolder", textBox10.Text);
+            errMsgBox.AppendLine("Ilosc zdjec w folderze nie odpowiada liczbie zeskanowanych numerow seryjnych.");
+            errMsgBox.AppendLine("Zeskanowanych numerów: " + filledBoxes.ToString());
+            errMsgBox.AppendLine("Wygenerowanych zdjęć: " + oldFileNames.Length);
+            FileOperations.AddUpdateAppSetting("inputFolder", textBox9.Text); //save in-out folder paths
+            FileOperations.AddUpdateAppSetting("outputFolder", textBox10.Text);
             string boardStatus = string.Empty;
             string outputFileName = string.Empty;
-            int boardNumber = 1;
-            //ResetUI(this);
-            if (CheckIfFolderExists(textBox9.Text) && CheckIfFolderExists(textBox10.Text))
-            {
-                //look for new files in folder
+            int boardNumber = 1; //needed to bypass counting from 0
+            if (FileOperations.CheckIfFolderExists(textBox9.Text) && FileOperations.CheckIfFolderExists(textBox10.Text))
+            {   //look for new files in folder
                 oldFileNames = GrabFileNames(textBox9.Text); //get old filenames
                 outputFolder = textBox10.Text; //set out folder
-                if (filledBoxes == oldFileNames.Length)
+                if (filledBoxes == oldFileNames.Length) //check if there is same amount of serials and images
                 {
                     for (int i = 0; i < filledBoxes; i++) //actual file moving loop
                     {
@@ -174,29 +124,22 @@ namespace XrayImageParser
                         else if (oldFileNames[i].Contains("FAIL"))
                         {
                             boardStatus = "FAIL";
-                            boardNumber += i;
-                            sb.AppendLine("Produkt: " + boardNumber.ToString() + " ma status FAIL");
+                            boardNumber += i; //mark which board is failing
+                            sb.AppendLine("Produkt nr: " + boardNumber.ToString() + " ma status FAIL");
                         }
-                        else
-                        {
-                            boardStatus = string.Empty;
-                        }
-                        if (checkBox1.Checked)
-                        {
-                            MessageBox.Show(oldFileNames[i] + " " + scannedSN[i]+ " " + boardStatus);
-                        }
+                        Debug.Assert(boardStatus != string.Empty); //check that images have correct name format
                         MoveFile(oldFileNames[i], scannedSN[i], boardStatus);
                     }
                     textBox9.Text = IncreaseFolderNumber(textBox9.Text); //each part stores images in new folder, increment number in output folder path
-                    ResetUI(this);
+                    ResetUI(this); //reset all textboxes except folder paths
                     if (sb.Length != 0)
                     {
-                        MessageBox.Show(sb.ToString());
+                        MessageBox.Show(sb.ToString()); //show which boards failed
                     }
                 }
                 else
                 {
-                    MessageBox.Show("Ilosc zdjec w folderze nie odpowiada liczbie zeskanowanych numerow seryjnych");
+                    MessageBox.Show(errMsgBox.ToString());
                 }
             }
             else
@@ -205,6 +148,7 @@ namespace XrayImageParser
                 DialogResult result = MessageBox.Show("Brak folderu na dysku Z. Czy chcesz go utworzyc?", "Brak folderu", buttons);
                 if (result == DialogResult.Yes)
                 {
+                    //check if its network drive and if its mapped
                     Directory.CreateDirectory(outputFolder);
                 }
             }
@@ -364,12 +308,15 @@ namespace XrayImageParser
             textBox8.Text = string.Empty;
             filledBoxes = 0;
             scannedSN.Clear();
-            Array.Clear(oldFileNames,0,filledBoxes);
+            Array.Clear(oldFileNames, 0, oldFileNames.Length);
+            Debug.Assert(oldFileNames.Length == 0);
             if (checkBox1.Checked)
             {
                 MessageBox.Show(oldFileNames.ToString());
             }
             label14.Text = "Zeskanowanych numerów:" + filledBoxes.ToString();
+            errMsgBox.Clear();
+            sb.Clear();
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -391,21 +338,5 @@ namespace XrayImageParser
         {
 
         }
-
-        //private void handleTextbox(int txtboxNumber, KeyEventArgs e)
-        //{
-        //    Control ctrl;
-        //    if (e.KeyCode == Keys.Enter)
-        //    {
-        //        if (CheckIfCorrectSerial(textBox8.Text))
-        //        {
-        //            filledBoxes += 1;
-        //        }
-        //        else
-        //        {
-        //            textBox8.Text = "";
-        //        }
-        //    }
-        //}
     }
 }
