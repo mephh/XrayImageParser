@@ -16,6 +16,7 @@ namespace XrayImageParser
         private string outputFolder = string.Empty;
         private StringBuilder sb = new StringBuilder();
         private readonly StringBuilder errMsgBox = new StringBuilder();
+        public string CurrentFile { get; set; }
 
         public Form1()
         {
@@ -55,7 +56,7 @@ namespace XrayImageParser
                 n += 1;
                 Debug.Assert(n != 1);
                 number = n.ToString();
-                string newFolderName = folderName.Substring(0, folderName.Length - 2) + number;
+                string newFolderName = folderName.Substring(0, folderName.Length - number.Length) + number;
                 return newFolderName;
             }
             catch
@@ -82,21 +83,72 @@ namespace XrayImageParser
 
         private bool MoveFile(string inputFile, string outputFile, string boardStatus)
         {
-            string outputFileName = outputFolder + "//" + outputFile;
+            //string copy = string.Empty;
+            string outputFileName = outputFolder + "//" + outputFile + "_" + boardStatus + ".jpg";
+            //string copyFileName = outputFileName + "_copy";
+
+            int chosenOption = 0;
             if (checkBox1.Checked) //debug mode
             {
                 MessageBox.Show("Stara nazwa zdjęcia: " + inputFile + " Nowa nazwa: " + outputFileName + "_" + boardStatus + ".jpg");
             }
+            if (File.Exists(outputFileName))
+            {
+                //call dialogbox
+                CurrentFile = outputFileName;
+                chosenOption = MoveOptions();
+            }
             try
             {
-                File.Move(inputFile, outputFileName + "_" + boardStatus + ".jpg");
+                if (chosenOption != 0)
+                {
+                    if (chosenOption == 1)
+                    {
+                        string copyFileName = outputFileName.Insert(outputFileName.IndexOf('.'), "_Copy");
+                        File.Replace(inputFile, outputFileName, copyFileName);
+                    }
+                    else if (chosenOption == 2)
+                    {
+                        File.Delete(outputFileName);
+                        File.Move(inputFile, outputFileName);
+                    }
+                }
+                else
+                {
+                    File.Move(inputFile, outputFileName);// + "_" + boardStatus + ".jpg");
+                }
+
                 return true;
             }
-            catch (Exception e)
+            catch (IOException e)
             {
                 MessageBox.Show("Nie mozna przeniesc pliku. Blad: " + e.ToString());
                 return false;
             }
+        }
+
+        public int MoveOptions()
+        {
+            int status = 0;
+            Form2 moveDialog = new Form2(CurrentFile);
+            moveDialog.StartPosition = FormStartPosition.CenterParent;
+            DialogResult result = moveDialog.ShowDialog();
+            if (result == DialogResult.Yes)
+            {
+                //overwrite
+                status = 2;
+            }
+            else if (result == DialogResult.Ignore)
+            {
+                //skip
+            }
+            else if (result == DialogResult.No)
+            {
+                //save copy
+                status = 1;
+            }
+            moveDialog.Dispose();
+            return status;
         }
 
         private void button1_Click(object sender, EventArgs e)
@@ -131,11 +183,11 @@ namespace XrayImageParser
                         MoveFile(oldFileNames[i], scannedSN[i], boardStatus);
                     }
                     textBox9.Text = IncreaseFolderNumber(textBox9.Text); //each part stores images in new folder, increment number in output folder path
-                    ResetUI(this); //reset all textboxes except folder paths
                     if (sb.Length != 0)
                     {
                         MessageBox.Show(sb.ToString()); //show which boards failed
                     }
+                    ResetUI(this); //reset all textboxes except folder paths
                 }
                 else
                 {
@@ -145,11 +197,17 @@ namespace XrayImageParser
             else
             {
                 MessageBoxButtons buttons = MessageBoxButtons.YesNo;
-                DialogResult result = MessageBox.Show("Brak folderu na dysku Z. Czy chcesz go utworzyc?", "Brak folderu", buttons);
+                DialogResult result = MessageBox.Show("Brak folderu do którego mają być przeniesione zdjęcia. Czy chcesz go utworzyc?", "Brak folderu", buttons);
                 if (result == DialogResult.Yes)
                 {
-                    //check if its network drive and if its mapped
-                    Directory.CreateDirectory(outputFolder);
+                    try
+                    {
+                        Directory.CreateDirectory(textBox10.Text);
+                    }
+                    catch
+                    {
+                        MessageBox.Show("Nie można utworzyć folderu.");
+                    }
                 }
             }
         }
@@ -309,7 +367,7 @@ namespace XrayImageParser
             filledBoxes = 0;
             scannedSN.Clear();
             Array.Clear(oldFileNames, 0, oldFileNames.Length);
-            Debug.Assert(oldFileNames.Length == 0);
+            //Debug.Assert(oldFileNames.Length == 8);
             if (checkBox1.Checked)
             {
                 MessageBox.Show(oldFileNames.ToString());
