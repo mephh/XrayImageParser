@@ -1,4 +1,5 @@
-﻿using System.Configuration;
+﻿using System;
+using System.Configuration;
 using System.IO;
 using System.Windows.Forms;
 
@@ -58,5 +59,51 @@ namespace XrayImageParser
             }
         }
 
+        internal bool GenerateReport(string path, string logfile)
+        {
+            string filePath = path + "\\Raport.txt";
+            string boxName = path.Substring(path.LastIndexOf('\\')+1);
+            string shortedLogName = logfile.Substring(logfile.LastIndexOf('/')+1);
+            string[] lines = { "Raport dla boxu nr " + boxName,
+                "Raport został wygenerowany dnia: " + DateTime.Now.ToShortDateString() + " o godzinie: " + DateTime.Now.ToShortTimeString(),
+                "LOG \t GODZINA TESTU"};
+            if (!File.Exists(filePath))
+            {
+                try
+                {
+                    //File.Create(filePath);
+                    File.WriteAllLines(filePath, lines);
+                    //using (StreamWriter sw = new StreamWriter(filePath, true))
+                    //{
+                    //    sw.WriteLine("Raport dla boxu nr " + boxName);
+                    //    sw.WriteLine("Raport został wygenerowany dnia: " + DateTime.Now.ToShortDateString() + " o godzinie: " + DateTime.Now.ToShortTimeString());
+                    //    sw.WriteLine();
+                    //    sw.WriteLine();
+                    //    sw.WriteLine("LOG \t GODZINA TESTU");
+                    //}
+                }
+                catch (Exception e)
+                {
+                    MessageBox.Show("Nie mozna utworzyc pliku z raportem. Kod bledu: " + e.ToString());
+                    return false;
+                }
+            }
+            using (StreamWriter sw = new StreamWriter(filePath, true))
+            {
+                //if (logfiles.Length != 0)
+                //{
+                //    for (int i = 0; i < logfiles.Length; i++)
+                //    {
+                //        sw.WriteLine(logfiles[i] + "\t \t " + DateTime.Now.ToShortTimeString());
+                //    }
+                //}
+                if (shortedLogName.Length != 0)
+                {
+                    sw.WriteLine(shortedLogName + " \t " + DateTime.Now.ToShortTimeString());
+                }
+            }
+            return true;
+
+        }
     }
 }

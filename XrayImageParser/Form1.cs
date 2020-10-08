@@ -10,6 +10,8 @@ namespace XrayImageParser
 {
     public partial class Form1 : Form
     {
+        //TODO raport txt z serialami i statusem w folderze o nazwie z numerem boxa
+
         private int filledBoxes = 0; //counts how many serial numbers were entered
         private List<string> scannedSN = new List<string>(); //list of serials for future no-duplicate-check  method
         private string[] oldFileNames = new string[8]; //array of filenames in input folder
@@ -17,6 +19,7 @@ namespace XrayImageParser
         private StringBuilder sb = new StringBuilder();
         private readonly StringBuilder errMsgBox = new StringBuilder();
         public string CurrentFile { get; set; }
+        FileOperations fileOp = new FileOperations();
 
         public Form1()
         {
@@ -70,7 +73,12 @@ namespace XrayImageParser
             try
             {
                 string[] sortedNames = Directory.GetFiles(folderPath, "*.jpg"); //look only for images
-                Debug.Assert(sortedNames.Length != 0);
+                //Debug.Assert(sortedNames.Length != 0);
+                if (sortedNames.Length == 0)
+                {
+                    MessageBox.Show("Brak zdjęć w folderze " + textBox9.Text);
+                    return Array.Empty<string>();
+                }
                 Array.Sort(sortedNames); //sort names so serial number is later assigned to correct image
                 return sortedNames;
             }
@@ -117,7 +125,8 @@ namespace XrayImageParser
                 {
                     File.Move(inputFile, outputFileName);// + "_" + boardStatus + ".jpg");
                 }
-
+                
+                fileOp.GenerateReport(textBox10.Text, outputFileName);
                 return true;
             }
             catch (IOException e)
@@ -153,14 +162,12 @@ namespace XrayImageParser
 
         private void button1_Click(object sender, EventArgs e)
         {
-            errMsgBox.AppendLine("Ilosc zdjec w folderze nie odpowiada liczbie zeskanowanych numerow seryjnych.");
-            errMsgBox.AppendLine("Zeskanowanych numerów: " + filledBoxes.ToString());
-            errMsgBox.AppendLine("Wygenerowanych zdjęć: " + oldFileNames.Length);
+
             FileOperations.AddUpdateAppSetting("inputFolder", textBox9.Text); //save in-out folder paths
             FileOperations.AddUpdateAppSetting("outputFolder", textBox10.Text);
             string boardStatus = string.Empty;
             string outputFileName = string.Empty;
-            int boardNumber = 1; //needed to bypass counting from 0
+            int boardNumber; //needed to bypass counting from 0
             if (FileOperations.CheckIfFolderExists(textBox9.Text) && FileOperations.CheckIfFolderExists(textBox10.Text))
             {   //look for new files in folder
                 oldFileNames = GrabFileNames(textBox9.Text); //get old filenames
@@ -176,13 +183,21 @@ namespace XrayImageParser
                         else if (oldFileNames[i].Contains("FAIL"))
                         {
                             boardStatus = "FAIL";
-                            boardNumber += i; //mark which board is failing
+                            boardNumber = i + 1; //mark which board is failing
                             sb.AppendLine("Produkt nr: " + boardNumber.ToString() + " ma status FAIL");
+
                         }
-                        Debug.Assert(boardStatus != string.Empty); //check that images have correct name format
-                        MoveFile(oldFileNames[i], scannedSN[i], boardStatus);
+                        //Debug.Assert(boardStatus != string.Empty); //check that images have correct name format
+                        if (boardStatus == string.Empty)
+                        {
+                            MessageBox.Show("Sprawdz czy log " + oldFileNames[i] + " ma na koncu status OK/FAIL");
+                        }
+                            MoveFile(oldFileNames[i], scannedSN[i], boardStatus);
                     }
-                    textBox9.Text = IncreaseFolderNumber(textBox9.Text); //each part stores images in new folder, increment number in output folder path
+                    if (oldFileNames.Length != 0)
+                    {
+                        textBox9.Text = IncreaseFolderNumber(textBox9.Text); //each part stores images in new folder, increment number in output folder path
+                    }
                     if (sb.Length != 0)
                     {
                         MessageBox.Show(sb.ToString()); //show which boards failed
@@ -191,6 +206,9 @@ namespace XrayImageParser
                 }
                 else
                 {
+                    errMsgBox.AppendLine("Ilosc zdjec w folderze nie odpowiada liczbie zeskanowanych numerow seryjnych.");
+                    errMsgBox.AppendLine("Zeskanowanych numerów: " + filledBoxes.ToString());
+                    errMsgBox.AppendLine("Wygenerowanych zdjęć: " + oldFileNames.Length);
                     MessageBox.Show(errMsgBox.ToString());
                 }
             }
@@ -203,6 +221,7 @@ namespace XrayImageParser
                     try
                     {
                         Directory.CreateDirectory(textBox10.Text);
+                        Directory.CreateDirectory(textBox9.Text);
                     }
                     catch
                     {
@@ -349,13 +368,7 @@ namespace XrayImageParser
 
         private void ResetUI(Control control)
         {
-            //foreach (var c in control.Controls)
-            //{
-            //    if (c is TextBox)
-            //    {
-            //        ((TextBox)c).Text = string.Empty;
-            //    }
-            //}
+
             textBox1.Text = string.Empty;
             textBox2.Text = string.Empty;
             textBox3.Text = string.Empty;
@@ -373,8 +386,8 @@ namespace XrayImageParser
                 MessageBox.Show(oldFileNames.ToString());
             }
             label14.Text = "Zeskanowanych numerów:" + filledBoxes.ToString();
-            errMsgBox.Clear();
-            sb.Clear();
+            errMsgBox.Length = 0;
+            sb.Length = 0;
         }
 
         private void Form1_Load(object sender, EventArgs e)
@@ -395,6 +408,11 @@ namespace XrayImageParser
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
 
+        }
+
+        private void Form1_Activated(object sender, EventArgs e)
+        {
+            textBox1.Focus();
         }
     }
 }
